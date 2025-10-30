@@ -1,13 +1,12 @@
 using UnityEngine;
 
-public class BillboardText : MonoBehaviour
+public class BillboardToCamera : MonoBehaviour
 {
     Camera cam;
     void LateUpdate()
     {
         if (!cam) cam = Camera.main;
         if (!cam) return;
-        transform.LookAt(transform.position + cam.transform.rotation * Vector3.forward,
-                         cam.transform.rotation * Vector3.up);
+        transform.forward = cam.transform.forward;
     }
 }

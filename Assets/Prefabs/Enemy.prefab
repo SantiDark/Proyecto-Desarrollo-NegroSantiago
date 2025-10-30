@@ -119,8 +119,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6206878435148202788}
-  - component: {fileID: 4340669477645403597}
   - component: {fileID: 1339924410303053042}
+  - component: {fileID: 5287054393554028031}
   m_Layer: 6
   m_Name: Enemy
   m_TagString: Untagged
@@ -144,28 +144,6 @@ Transform:
   - {fileID: 4933564243299464602}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: -181.094, z: 0}
---- !u!114 &4340669477645403597
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5848416876100554235}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bfaed4bf995a73548ae383dc25ff5ee8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  player: {fileID: 0}
-  health: {fileID: 1339924410303053042}
-  controller: {fileID: 0}
-  moveSpeed: 3.5
-  stopDistance: 1.2
-  chaseDistance: 5
-  useVisionCone: 1
-  visionAngle: 60
-  visionDistance: 12
-  makeCollidersTriggersAtStart: 1
 --- !u!114 &1339924410303053042
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -179,3 +157,31 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxHealth: 100
+  onDeath:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!143 &5287054393554028031
+CharacterController:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5848416876100554235}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Height: 2
+  m_Radius: 0.5
+  m_SlopeLimit: 45
+  m_StepOffset: 0.3
+  m_SkinWidth: 0.08
+  m_MinMoveDistance: 0.001
+  m_Center: {x: 0, y: 0, z: 0}
