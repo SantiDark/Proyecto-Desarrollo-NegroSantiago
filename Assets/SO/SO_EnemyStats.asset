@@ -18,10 +18,10 @@ MonoBehaviour:
   chaseDistance: 10
   useVisionCone: 1
   visionAngle: 60
-  visionDistance: 12
+  visionDistance: 10
   visionObstacles:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 128
   touchDamage: 25
   deathVfxPrefab: {fileID: 0}
   staminaDrainPerSecond: 3
