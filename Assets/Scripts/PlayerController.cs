@@ -18,25 +18,29 @@ public class PlayerController : MonoBehaviour
     [Header("Crouch")]
     public KeyCode crouchKey1 = KeyCode.C;
     public KeyCode crouchKey2 = KeyCode.LeftControl;
-    public float standHeight = 2f;
-    public float crouchHeight = 1f;           // 50% de la altura normal
-    public float crouchSpeedMultiplier = 0.75f; // velocidad reducida 25%
+    [Range(0.1f, 1f)] public float crouchHeightFactor = 0.5f; // 50% de altura
+    [Range(0f, 1f)] public float crouchSpeedMult = 0.75f;    // velocidad -25%
+    public float crouchLerp = 15f;                            // suavizado de transición
+
     bool isCrouching = false;
+    float baseHeight;
+    Vector3 baseCenter;
 
     void Awake()
     {
         controller = GetComponent<CharacterController>();
         stamina = maxStamina; // arranca llena
-        controller.height = standHeight;
+
+        baseHeight = controller.height;
+        baseCenter = controller.center;
     }
 
     void Update()
     {
-        // Si el controller está deshabilitado (p.ej., al morir), no procesar input
         if (controller == null || !controller.enabled) return;
 
-        HandleMovement();
         HandleCrouch();
+        HandleMovement();
         HandleStamina();
     }
 
@@ -46,24 +50,22 @@ public class PlayerController : MonoBehaviour
         float z = Input.GetAxisRaw("Vertical");
         Vector3 move = (transform.right * x + transform.forward * z).normalized;
 
-        float speed = isCrouching ? moveSpeed * crouchSpeedMultiplier : moveSpeed;
+        float speed = isCrouching ? moveSpeed * crouchSpeedMult : moveSpeed;
         controller.SimpleMove(move * speed);
     }
 
     void HandleCrouch()
     {
         bool crouchInput = Input.GetKey(crouchKey1) || Input.GetKey(crouchKey2);
+        isCrouching = crouchInput;
 
-        if (crouchInput && !isCrouching)
-        {
-            isCrouching = true;
-            controller.height = crouchHeight;
-        }
-        else if (!crouchInput && isCrouching)
-        {
-            isCrouching = false;
-            controller.height = standHeight;
-        }
+        float targetHeight = isCrouching ? baseHeight * crouchHeightFactor : baseHeight;
+        controller.height = Mathf.Lerp(controller.height, targetHeight, Time.deltaTime * crouchLerp);
+
+        // ajusta el centro para no hundirse visualmente
+        float heightRatio = controller.height / baseHeight;
+        Vector3 targetCenter = new Vector3(baseCenter.x, baseCenter.y * heightRatio, baseCenter.z);
+        controller.center = Vector3.Lerp(controller.center, targetCenter, Time.deltaTime * crouchLerp);
     }
 
     void HandleStamina()
@@ -76,7 +78,6 @@ public class PlayerController : MonoBehaviour
         stamina = Mathf.Clamp(stamina, 0f, maxStamina);
     }
 
-    // Define el drenaje por “amenaza” en stamina (por segundo)
     public void SetThreat(float drainPerSecond)
     {
         threatDrainPerSecond = Mathf.Max(0f, drainPerSecond);

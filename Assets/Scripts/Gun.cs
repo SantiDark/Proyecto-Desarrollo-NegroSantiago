@@ -1,5 +1,5 @@
 ﻿using UnityEngine;
-using TMPro;  // necesario para usar TextMeshProUGUI
+using TMPro;
 
 public class Gun : MonoBehaviour
 {
@@ -12,15 +12,15 @@ public class Gun : MonoBehaviour
     [Header("Raycast")]
     public Camera cam;
 
-    [Header("Ammo")]
-    public int magazineSize = 7;             // tamaño del cargador
-    public int bulletsInMag;                 // balas actuales
-    public int totalAmmo = 2;               // balas totales (reserva)
-    public KeyCode reloadKey = KeyCode.R;    // tecla para recargar
+    [Header("Ammo (Cargadores)")]
+    public int magazineSize = 15;   // 15 balas por cargador
+    public int magazines = 2;       // cantidad de cargadores (enteros)
+    public KeyCode reloadKey = KeyCode.R;
 
     [Header("UI")]
-    public TextMeshProUGUI ammoText;         // referencia al TMP del HUD
+    public TextMeshProUGUI ammoText;
 
+    int bulletsInMag;               // balas actuales en el cargador puesto
     float nextShotTime;
 
     void Awake()
@@ -29,8 +29,7 @@ public class Gun : MonoBehaviour
         if (!cam)
             Debug.LogWarning("[Gun] No camera assigned and no Camera.main found (Tag 'MainCamera' missing?)");
 
-        // cargador lleno al iniciar
-        bulletsInMag = magazineSize;
+        ResetAmmo(); // arranca en 2x15
         UpdateAmmoUI();
     }
 
@@ -61,26 +60,22 @@ public class Gun : MonoBehaviour
 
     void TryReload()
     {
-        if (bulletsInMag == magazineSize)
+        if (bulletsInMag >= magazineSize)
         {
             Debug.Log("[Gun] Cargador completo, no se recarga.");
             return;
         }
 
-        if (totalAmmo <= 0)
+        if (magazines <= 0)
         {
-            Debug.Log("[Gun] Sin munición extra.");
+            Debug.Log("[Gun] Sin cargadores restantes.");
             return;
         }
 
-        int bulletsNeeded = magazineSize - bulletsInMag;
-        int bulletsToLoad = Mathf.Min(bulletsNeeded, totalAmmo);
-
-        bulletsInMag += bulletsToLoad;
-        totalAmmo -= bulletsToLoad;
-
+        magazines--;                  // gastás 1 cargador
+        bulletsInMag = magazineSize;  // recarga a 15
         UpdateAmmoUI();
-        Debug.Log($"[Gun] Recargado ({bulletsToLoad} balas). Total restante: {totalAmmo}");
+        Debug.Log($"[Gun] Recargado. Cargadores restantes: {magazines}");
     }
 
     void ShootRaycast()
@@ -102,29 +97,21 @@ public class Gun : MonoBehaviour
             if (hp != null)
             {
                 hp.TakeDamage(Mathf.RoundToInt(damage));
-                Debug.Log($"[Gun] Hit {hit.collider.name} (layer {LayerMask.LayerToName(hit.collider.gameObject.layer)}) dmg {damage}");
+                Debug.Log($"[Gun] Hit {hit.collider.name} dmg {damage}");
             }
-            else
-            {
-                Debug.Log($"[Gun] Hit {hit.collider.name} en layer {LayerMask.LayerToName(hit.collider.gameObject.layer)} pero sin componente Health");
-            }
-        }
-        else if (Physics.Raycast(origin, dir, out RaycastHit debugHit, range, ~0, QueryTriggerInteraction.Collide))
-        {
-            string layerName = LayerMask.LayerToName(debugHit.collider.gameObject.layer);
-            Debug.Log($"[Gun][DEBUG] Ray hits '{debugHit.collider.name}' en layer '{layerName}' pero no está en hittableMask");
-        }
-        else
-        {
-            Debug.Log("[Gun] Miss (no hit dentro del rango)");
         }
     }
 
     void UpdateAmmoUI()
     {
         if (ammoText)
-            ammoText.text = $"{bulletsInMag} | {totalAmmo}";
-
+            ammoText.text = $"{bulletsInMag} | {magazines}";
     }
 
+    public void ResetAmmo()
+    {
+        magazines = 2;
+        bulletsInMag = magazineSize;
+        UpdateAmmoUI();
+    }
 }
