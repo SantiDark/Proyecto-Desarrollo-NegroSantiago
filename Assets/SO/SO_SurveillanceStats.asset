@@ -14,9 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxHealth: 100
   useVisionCone: 1
-  visionAngle: 60
+  visionAngle: 40
   visionDistance: 5
   visionObstacles:
     serializedVersion: 2
     m_Bits: 0
-  rotateSpeedDegPerSec: 30
+  rotateSpeedDegPerSec: 61.8

@@ -5,7 +5,7 @@ public class SurveillanceCamera : MonoBehaviour
 {
     public Transform player;
     public SurveillanceStats stats;
-    public Transform head;               // opcional: el pivot que rota (si no, usa transform)
+    public Transform head;            
     public bool drawGizmos = true;
 
     float eyeHeight = 1.8f;
@@ -44,14 +44,15 @@ public class SurveillanceCamera : MonoBehaviour
         }
 
         // 3) Oclusión
-        if (Physics.Raycast(eye, toTarget.normalized, out RaycastHit hit, stats.visionDistance, ~0, QueryTriggerInteraction.Ignore))
-        {
+        if(Physics.Raycast(eye, toTarget.normalized, out RaycastHit hit, stats.visionDistance, ~0, QueryTriggerInteraction.Ignore))
+{
             if (hit.transform != player)
             {
                 int mask = 1 << hit.transform.gameObject.layer;
                 if ((stats.visionObstacles.value & mask) != 0) return; // bloqueado
             }
         }
+
 
         // Detectado
         Debug.Log("[Camera] Player detected!");
