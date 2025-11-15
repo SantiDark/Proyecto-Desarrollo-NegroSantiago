@@ -1,6 +1,8 @@
 ﻿using UnityEngine;
+using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(CharacterController))]
+[RequireComponent(typeof(Health))]
 public class PlayerController : MonoBehaviour
 {
     [Header("Movimiento")]
@@ -26,17 +28,40 @@ public class PlayerController : MonoBehaviour
     float baseHeight;
     Vector3 baseCenter;
 
+    // --- Vida / muerte / respawn ---
+    Health health;
+    bool isDead = false;
+    Vector3 spawnPos;
+    Quaternion spawnRot;
+
     void Awake()
     {
         controller = GetComponent<CharacterController>();
+        health = GetComponent<Health>();
+
         stamina = maxStamina; // arranca llena
 
         baseHeight = controller.height;
         baseCenter = controller.center;
+
+        // punto inicial de respawn
+        spawnPos = transform.position;
+        spawnRot = transform.rotation;
     }
 
     void Update()
     {
+        // F1: respawn con valores iniciales
+        if (Input.GetKeyDown(KeyCode.F1))
+            RespawnPlayer();
+
+        // F2: reiniciar escena
+        if (Input.GetKeyDown(KeyCode.F2))
+            ReloadScene();
+
+        // si está muerto, no procesa movimiento ni stamina
+        if (isDead) return;
+
         if (controller == null || !controller.enabled) return;
 
         HandleCrouch();
@@ -85,11 +110,56 @@ public class PlayerController : MonoBehaviour
 
     public float GetStamina() => stamina;
 
+    // =========================================================
+    // LLAMADO DESDE Health CUANDO current == 0
+    // =========================================================
     public void OnPlayerDeath()
     {
+        isDead = true;
+
         if (controller) controller.enabled = false;
         foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
         foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = false;
-        Debug.Log("[Player] Muerto");
+
+        Debug.Log("[Player] Muerto. F1 = respawn, F2 = reiniciar escena.");
+    }
+
+    // =========================================================
+    // F1 – Respawn con valores iniciales
+    // =========================================================
+    void RespawnPlayer()
+    {
+        // reposicionar en spawn
+        controller.enabled = false;
+        transform.position = spawnPos;
+        transform.rotation = spawnRot;
+        controller.enabled = true;
+
+        // restaurar tamaño del CharacterController
+        controller.height = baseHeight;
+        controller.center = baseCenter;
+
+        // reactivar colliders y renders
+        foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = true;
+        foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = true;
+
+        // resetear vida y stamina
+        if (health != null)
+            health.SetMaxAndFill(health.MaxHealth);
+
+        stamina = maxStamina;
+        threatDrainPerSecond = 0f;
+        isDead = false;
+
+        Debug.Log("[Player] Respawn realizado.");
+    }
+
+    // =========================================================
+    // F2 – Reiniciar escena actual
+    // =========================================================
+    void ReloadScene()
+    {
+        var scene = SceneManager.GetActiveScene();
+        SceneManager.LoadScene(scene.buildIndex);
     }
 }

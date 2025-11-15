@@ -19,4 +19,4 @@ MonoBehaviour:
   visionObstacles:
     serializedVersion: 2
     m_Bits: 0
-  rotateSpeedDegPerSec: 61.8
+  rotateSpeedDegPerSec: 30

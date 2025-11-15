@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 395ac5a4133391c499c6f239eba1b6e4, type: 3}
-  m_Name: SO_EnemyStats
+  m_Name: Soldier
   m_EditorClassIdentifier: 
   maxHealth: 100
   moveSpeed: 3.5

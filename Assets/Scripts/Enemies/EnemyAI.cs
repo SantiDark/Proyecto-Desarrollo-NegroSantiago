@@ -1,13 +1,15 @@
-﻿using UnityEngine;
+﻿using System;
+using System.Collections;
+using UnityEngine;
 using TMPro;
 
 [RequireComponent(typeof(CharacterController))]
 public class EnemyAI : MonoBehaviour
 {
-    public enum State { normal, chase, damage, dead }
+    public enum State { normal, patrol, alert, chase, damage, dead }
 
     [Header("Referencias")]
-    public Transform player;         // arrastrar Player
+    public Transform player;         // arrastrar Player (root, con Health)
     public EnemyStats stats;         // ScriptableObject con visión/velocidad
     public Health health;            // Health del enemigo
 
@@ -20,16 +22,25 @@ public class EnemyAI : MonoBehaviour
     public int damagePerShot = 10;   // daño al jugador por tiro
     float fireCooldown = 0f;
 
+    [Header("Patrulla")]
+    public Transform[] patrolPoints;           // puntos de patrulla del nivel
+    public float patrolSpeed = 2.0f;           // velocidad en patrulla
+    public float patrolArriveThreshold = 0.3f; // distancia mínima para cambiar de punto
+    int patrolIndex = 0;
+
     [Header("Debug/Gizmos")]
-    public bool drawGizmos = true;   // mostrar cono de visión en la escena
+    public bool drawGizmos = true;
     public Color gizmoVisionColor = new Color(0, 1, 0, 0.15f);
     public Color gizmoEdgeColor = new Color(0, 0.8f, 0, 0.9f);
     public Color gizmoBlockedColor = new Color(1, 0, 0, 0.9f);
 
     CharacterController controller;
     State state = State.normal;
-    bool lockedInChase = false;      // una vez que entra en chase, no sale
     float eyeHeight = 1.6f;
+
+    // --- ALERTA GLOBAL ---
+    public static event Action OnGlobalAlert;
+    bool alertAfterHitCoroutineRunning = false;
 
     void Reset()
     {
@@ -43,55 +54,103 @@ public class EnemyAI : MonoBehaviour
         if (health == null) health = GetComponent<Health>();
     }
 
+    void OnEnable()
+    {
+        OnGlobalAlert += HandleGlobalAlert;
+    }
+
+    void OnDisable()
+    {
+        OnGlobalAlert -= HandleGlobalAlert;
+    }
+
+    void Start()
+    {
+        if (patrolPoints != null && patrolPoints.Length > 0)
+            SetState(State.patrol);
+        else
+            SetState(State.normal);
+    }
+
     void Update()
     {
         if (state == State.dead) return;
 
         fireCooldown -= Time.deltaTime;
 
-        DetectPlayer();   // visión (vectores) + oclusión
-        RunState();       // movimiento
+        RunState();
+
+        // DISPARO: si lo ve y está en rango, intenta hacer daño
+        if (CanSeePlayer())
+        {
+            float dist = Vector3.Distance(transform.position, player.position);
+            if (dist <= fireDistance)
+            {
+                SetState(State.damage);  // para que el texto muestre damage
+                TryShootAtPlayer();
+            }
+        }
 
         if (stateText) stateText.text = state.ToString();
     }
 
-    // --- DETECCIÓN CON VECTORES + OCULSIÓN ---
-    void DetectPlayer()
+    // ------------------------------------------------------
+    // CAMBIO DE ESTADO
+    // ------------------------------------------------------
+    void SetState(State newState)
     {
-        if (lockedInChase) { state = State.chase; return; }
-        if (player == null || stats == null) return;
+        if (state == newState) return;
+
+        state = newState;
+        Debug.Log($"[EnemyAI] {name} state -> {state}");
+
+        if (stateText)
+            stateText.text = state.ToString();
+    }
+
+    // ------------------------------------------------------
+    //  VISIÓN (distancia + cono + oclusión con Obstacles)
+    // ------------------------------------------------------
+    bool CanSeePlayer()
+    {
+        if (!player || !stats) return false;
 
         Vector3 eye = transform.position + Vector3.up * eyeHeight;
         Vector3 playerEye = player.position + Vector3.up * eyeHeight;
         Vector3 toTarget = playerEye - eye;
 
-        // 1) Alcance
-        float dist = Vector3.Distance(eye, playerEye);
-        if (dist > stats.visionDistance) return;
+        // 1) Distancia
+        float dist = toTarget.magnitude;
+        if (dist > stats.visionDistance) return false;
 
-        // 2) Ángulo (cono)
+        // 2) Ángulo
         if (stats.useVisionCone)
         {
-            float angle = Vector3.Angle(transform.forward, toTarget); // [0..180]
-            if (angle > stats.visionAngle * 0.5f) return;
+            float angle = Vector3.Angle(transform.forward, toTarget);
+            if (angle > stats.visionAngle * 0.5f) return false;
         }
 
-        // 3) Oclusión por Obstacles
-        if (Physics.Raycast(eye, toTarget.normalized, out RaycastHit hit, stats.visionDistance, ~0, QueryTriggerInteraction.Ignore))
+        // 3) Oclusión
+        if (Physics.Raycast(eye, toTarget.normalized, out RaycastHit hit,
+            stats.visionDistance, ~0, QueryTriggerInteraction.Ignore))
         {
             if (hit.transform != player)
             {
                 int hitLayerMask = 1 << hit.transform.gameObject.layer;
                 if ((stats.visionObstacles.value & hitLayerMask) != 0)
-                    return; // bloqueada la visión
+                {
+                    // hay algo entre medio en layer de Obstacles
+                    return false;
+                }
             }
         }
 
-        // visto!
-        state = State.chase;
-        lockedInChase = true; // ya no vuelve atrás hasta morir
+        return true;
     }
 
+    // ------------------------------------------------------
+    //  LÓGICA POR ESTADO (SOLO MOVIMIENTO / ALERTAS)
+    // ------------------------------------------------------
     void RunState()
     {
         switch (state)
@@ -99,61 +158,95 @@ public class EnemyAI : MonoBehaviour
             case State.normal:
                 controller.SimpleMove(Vector3.zero);
                 if (player) Face(player.position);
+
+                if (CanSeePlayer())
+                {
+                    RaiseGlobalAlertFromEnemy();
+                    SetState(State.alert);
+                }
                 break;
 
+            case State.patrol:
+                UpdatePatrol();
+
+                if (CanSeePlayer())
+                {
+                    RaiseGlobalAlertFromEnemy();
+                    SetState(State.alert);
+                }
+                break;
+
+            case State.alert:
             case State.chase:
-            case State.damage: // damage cae inmediatamente en chase
-                if (!player) return;
-                Vector3 to = player.position - transform.position;
-                to.y = 0f;
-
-                float stop = stats.stopDistance;
-                if (to.sqrMagnitude > stop * stop)
-                {
-                    Vector3 dir = to.normalized;
-                    controller.SimpleMove(dir * stats.moveSpeed);
-                    Face(player.position);
-                }
-                else
-                {
-                    controller.SimpleMove(Vector3.zero);
-                    Face(player.position);
-                }
-
-                TryShootAtPlayer(); // dispara sólo en chase/damage
+            case State.damage:
+                UpdateMoveTowardsPlayer();
                 break;
         }
     }
 
-    void TryShootAtPlayer()
+    void UpdatePatrol()
     {
-        if (!player || fireCooldown > 0f) return;
-        if (state != State.chase && state != State.damage) return;
-
-        Vector3 from = transform.position + Vector3.up * eyeHeight;
-        Vector3 to = player.position + Vector3.up * eyeHeight;
-        Vector3 dir = (to - from).normalized;
-
-        float dist = Vector3.Distance(from, to);
-        if (dist > fireDistance) return;
-
-        // LoS: que no lo tape Obstacles
-        if (Physics.Raycast(from, dir, out RaycastHit hit, fireDistance, ~0, QueryTriggerInteraction.Ignore))
+        if (patrolPoints == null || patrolPoints.Length == 0)
         {
-            if (hit.transform != player)
-            {
-                int mask = 1 << hit.transform.gameObject.layer;
-                if ((stats.visionObstacles.value & mask) != 0)
-                    return; // tapado por Obstacles
-            }
+            controller.SimpleMove(Vector3.zero);
+            return;
         }
 
-        // aplicar daño al jugador
+        Transform targetPoint = patrolPoints[patrolIndex];
+        Vector3 currentPos = transform.position;
+        Vector3 targetPos = targetPoint.position;
+
+        Vector3 toTarget = targetPos - currentPos;
+        toTarget.y = 0f;
+
+        float sqrDist = toTarget.sqrMagnitude;
+        float sqrThreshold = patrolArriveThreshold * patrolArriveThreshold;
+
+        if (sqrDist <= sqrThreshold)
+        {
+            patrolIndex = (patrolIndex + 1) % patrolPoints.Length;
+            return;
+        }
+
+        Vector3 dir = toTarget.normalized;
+        controller.SimpleMove(dir * patrolSpeed);
+        Face(targetPos);
+    }
+
+    void UpdateMoveTowardsPlayer()
+    {
+        if (!player) return;
+
+        Vector3 to = player.position - transform.position;
+        to.y = 0f;
+
+        float stop = stats.stopDistance;
+        if (to.sqrMagnitude > stop * stop)
+        {
+            Vector3 dir = to.normalized;
+            controller.SimpleMove(dir * stats.moveSpeed);
+            Face(player.position);
+        }
+        else
+        {
+            controller.SimpleMove(Vector3.zero);
+            Face(player.position);
+        }
+    }
+
+    // ------------------------------------------------------
+    //  DISPARO (SIN RAYCAST EXTRA)
+    // ------------------------------------------------------
+    void TryShootAtPlayer()
+    {
+        if (!player) return;
+        if (fireCooldown > 0f) return;
+
         Health playerHealth = player.GetComponent<Health>();
-        if (playerHealth)
+        if (playerHealth != null)
         {
             playerHealth.TakeDamage(damagePerShot);
-            Debug.Log($"[Soldier] Hit player for {damagePerShot} dmg");
+            Debug.Log($"[Soldier] Hit PLAYER for {damagePerShot} dmg");
         }
 
         fireCooldown = 1f / Mathf.Max(0.01f, fireRate);
@@ -167,41 +260,79 @@ public class EnemyAI : MonoBehaviour
             transform.rotation = Quaternion.LookRotation(fwd);
     }
 
-    // Llamado desde Health al recibir daño (o desde la bala)
+    // ------------------------------------------------------
+    //  DAÑO Y MUERTE DEL ENEMIGO
+    // ------------------------------------------------------
     public void OnDamage(int amount)
     {
         if (state == State.dead) return;
-        state = State.damage;
-        lockedInChase = true; // si le pegan, queda “lockeado” en chase
+
+        SetState(State.damage);
+
+        if (!alertAfterHitCoroutineRunning)
+            StartCoroutine(AlertIfAliveAfterDelay(3f));
     }
 
-    // Llamado desde el UnityEvent OnDeath de Health
+    IEnumerator AlertIfAliveAfterDelay(float delay)
+    {
+        alertAfterHitCoroutineRunning = true;
+        yield return new WaitForSeconds(delay);
+
+        if (state != State.dead &&
+            state != State.alert &&
+            state != State.chase)
+        {
+            RaiseGlobalAlertFromEnemy();
+            SetState(State.alert);
+        }
+
+        alertAfterHitCoroutineRunning = false;
+    }
+
     public void OnDeath()
     {
-        state = State.dead;
+        SetState(State.dead);
         if (controller) controller.enabled = false;
         Destroy(gameObject, 0f);
     }
 
-    // --- GIZMOS DEL CONO DE VISIÓN ---
+    // ------------------------------------------------------
+    //  ALERTA GLOBAL
+    // ------------------------------------------------------
+    public static void AlertAllFromCamera()
+    {
+        Debug.Log("[EnemyAI] Global alert from camera");
+        OnGlobalAlert?.Invoke();
+    }
+
+    void RaiseGlobalAlertFromEnemy()
+    {
+        Debug.Log($"[EnemyAI] {name} raising global alert");
+        OnGlobalAlert?.Invoke();
+    }
+
+    void HandleGlobalAlert()
+    {
+        if (state == State.dead) return;
+        SetState(State.alert);
+    }
+
+    // --- GIZMOS ---
     void OnDrawGizmosSelected()
     {
         if (!drawGizmos || stats == null) return;
 
         Vector3 eye = transform.position + Vector3.up * eyeHeight;
 
-        // Disco/radio
         Gizmos.color = gizmoVisionColor;
         DrawCircle(eye, stats.visionDistance, 24);
 
-        // Cono (dos bordes)
         Gizmos.color = gizmoEdgeColor;
         Vector3 left = DirFromAngle(-stats.visionAngle * 0.5f);
         Vector3 right = DirFromAngle(+stats.visionAngle * 0.5f);
         Gizmos.DrawLine(eye, eye + left * stats.visionDistance);
         Gizmos.DrawLine(eye, eye + right * stats.visionDistance);
 
-        // Raycast al jugador (verde si visible, rojo si bloqueado)
         if (player)
         {
             Vector3 playerEye = player.position + Vector3.up * eyeHeight;
@@ -222,7 +353,7 @@ public class EnemyAI : MonoBehaviour
         }
     }
 
-    Vector3 DirFromAngle(float degrees)   // en espacio global (Y up)
+    Vector3 DirFromAngle(float degrees)
     {
         float rad = degrees * Mathf.Deg2Rad;
         Vector3 dir = new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad));

@@ -1,30 +1,72 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 [RequireComponent(typeof(Health))]
 public class SurveillanceCamera : MonoBehaviour
 {
+    [Header("Player & Stats")]
     public Transform player;
     public SurveillanceStats stats;
-    public Transform head;            
+    public Transform head;
     public bool drawGizmos = true;
 
+    [Header("Barrido")]
+    // Distancia desde el ojo de la cámara a la pared antes de rebotar
+    public float wallDetectDistance = 0.8f;
+    // Layers que cuentan como pared para el rebote
+    public LayerMask wallMask;
+
     float eyeHeight = 1.8f;
+    float currentRotationDirection = 1f;   // 1 o -1
     Health health;
 
     void Awake()
     {
         health = GetComponent<Health>();
         if (!head) head = transform;
+
+        // Cuando la vida llega a 0, destruimos la cámara
+        health.onDeath.AddListener(HandleDeath);
+    }
+
+    void HandleDeath()
+    {
+        Destroy(gameObject);
     }
 
     void Update()
     {
-        // barrido opcional
-        head.Rotate(0f, stats.rotateSpeedDegPerSec * Time.deltaTime, 0f, Space.World);
+        if (!stats) return;
 
-        DetectPlayer(); // vectores + oclusi�n
+        RotateWithBounce();
+        DetectPlayer();
     }
 
+    // ------------------------------------------------------
+    //  Rotación con rebote al acercarse a la pared
+    // ------------------------------------------------------
+    void RotateWithBounce()
+    {
+        float step = stats.rotateSpeedDegPerSec * currentRotationDirection * Time.deltaTime;
+
+        // Aplicamos la rotación de este frame
+        head.Rotate(0f, step, 0f, Space.World);
+
+        // Desde el "ojo" tiramos un ray hacia adelante
+        Vector3 eye = head.position + Vector3.up * eyeHeight;
+
+        if (Physics.Raycast(eye, head.forward, out RaycastHit hit, wallDetectDistance, wallMask, QueryTriggerInteraction.Ignore))
+        {
+            // Si hay pared cerca:
+            // 1) Deshacemos la rotación de este frame
+            head.Rotate(0f, -step, 0f, Space.World);
+            // 2) Invertimos la dirección para empezar a girar al otro lado
+            currentRotationDirection *= -1f;
+        }
+    }
+
+    // ------------------------------------------------------
+    //  Detección del jugador
+    // ------------------------------------------------------
     void DetectPlayer()
     {
         if (!player || !stats) return;
@@ -36,16 +78,16 @@ public class SurveillanceCamera : MonoBehaviour
         // 1) Distancia
         if (toTarget.magnitude > stats.visionDistance) return;
 
-        // 2) �ngulo
+        // 2) Ángulo
         if (stats.useVisionCone)
         {
             float angle = Vector3.Angle(head.forward, toTarget);
             if (angle > stats.visionAngle * 0.5f) return;
         }
 
-        // 3) Oclusi�n
-        if(Physics.Raycast(eye, toTarget.normalized, out RaycastHit hit, stats.visionDistance, ~0, QueryTriggerInteraction.Ignore))
-{
+        // 3) Oclusión
+        if (Physics.Raycast(eye, toTarget.normalized, out RaycastHit hit, stats.visionDistance, ~0, QueryTriggerInteraction.Ignore))
+        {
             if (hit.transform != player)
             {
                 int mask = 1 << hit.transform.gameObject.layer;
@@ -53,13 +95,15 @@ public class SurveillanceCamera : MonoBehaviour
             }
         }
 
-
         // Detectado
         Debug.Log("[Camera] Player detected!");
-        // (Para el 7�10, ac� vamos a poner la alerta global a todos los soldiers)
+        // Poner a TODOS los Enemigos Soldier en estado alert
+        EnemyAI.AlertAllFromCamera();
     }
 
-    // --- Gizmos ---
+    // ------------------------------------------------------
+    //  GIZMOS
+    // ------------------------------------------------------
     void OnDrawGizmosSelected()
     {
         if (!drawGizmos || stats == null) return;
@@ -77,6 +121,7 @@ public class SurveillanceCamera : MonoBehaviour
         Gizmos.DrawLine(eye, eye + R * stats.visionDistance);
     }
 
+    // Helpers
     static Vector3 DirFromAngle(Transform basis, float degrees)
     {
         float rad = degrees * Mathf.Deg2Rad;
