@@ -81,17 +81,32 @@ public class PlayerController : MonoBehaviour
 
     void HandleCrouch()
     {
+        // Input de agacharse
         bool crouchInput = Input.GetKey(crouchKey1) || Input.GetKey(crouchKey2);
         isCrouching = crouchInput;
 
-        float targetHeight = isCrouching ? baseHeight * crouchHeightFactor : baseHeight;
+        // Factor de altura objetivo: 1 = de pie, crouchHeightFactor = agachado (ej: 0.5 = 50%)
+        float targetFactor = isCrouching ? crouchHeightFactor : 1f;
+
+        // --- CharacterController: altura y centro ---
+        float targetHeight = baseHeight * targetFactor;
         controller.height = Mathf.Lerp(controller.height, targetHeight, Time.deltaTime * crouchLerp);
 
-        // ajusta el centro para no hundirse visualmente
-        float heightRatio = controller.height / baseHeight;
-        Vector3 targetCenter = new Vector3(baseCenter.x, baseCenter.y * heightRatio, baseCenter.z);
+        // colisionador centrado: lo movemos la mitad de lo que encogimos
+        float heightDiff = baseHeight - controller.height;          // cuánto se achicó
+        float centerOffset = heightDiff * 0.5f;                       // mitad hacia abajo
+        Vector3 targetCenter = new Vector3(baseCenter.x,
+                                           baseCenter.y - centerOffset,
+                                           baseCenter.z);
         controller.center = Vector3.Lerp(controller.center, targetCenter, Time.deltaTime * crouchLerp);
+
+        // --- Escala visual del jugador ---
+        Vector3 scale = transform.localScale;
+        float targetScaleY = targetFactor;                            // 0.5 = mitad de alto
+        scale.y = Mathf.Lerp(scale.y, targetScaleY, Time.deltaTime * crouchLerp);
+        transform.localScale = scale;
     }
+
 
     void HandleStamina()
     {

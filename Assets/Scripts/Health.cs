@@ -15,7 +15,7 @@ public class Health : MonoBehaviour
 
     void Start()
     {
-        current = maxHealth;                     // ✅ arranca lleno
+        current = maxHealth;
         OnHealthChanged?.Invoke(current, maxHealth);
     }
 
@@ -30,26 +30,37 @@ public class Health : MonoBehaviour
     {
         if (current <= 0) return;
 
+        // daño siempre positivo
+        int dmg = Mathf.Max(0, amount);
         int prev = current;
-        current = Mathf.Max(0, current - Mathf.Max(0, amount));  // ✅ resta daño
+
+        current = Mathf.Max(0, current - dmg);
 
         if (current != prev)
             OnHealthChanged?.Invoke(current, maxHealth);
 
-        if (current == 0)
+        // ¿Es un enemigo?
+        var ai = GetComponent<EnemyAI>();
+        if (ai && dmg > 0)
         {
-            // 🔸 Dispara evento Unity para animaciones u otros
-            onDeath?.Invoke();
-
-            // 🔸 Si es enemigo, llamamos a su muerte
-            var ai = GetComponent<EnemyAI>();
-            if (ai)
+            if (current > 0)
             {
+                // Recibió un tiro y sobrevivió → OnDamage (timer 3s)
+                ai.OnDamage(dmg);
+            }
+            else
+            {
+                // Lo matamos con este disparo
                 ai.OnDeath();
                 return;
             }
+        }
 
-            // 🔸 Si es jugador, avisamos a su controlador
+        // Lógica de muerte genérica (jugador u otros)
+        if (current == 0)
+        {
+            onDeath?.Invoke();
+
             var player = GetComponent<PlayerController>();
             if (player)
             {
