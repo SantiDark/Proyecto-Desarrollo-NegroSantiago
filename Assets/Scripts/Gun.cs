@@ -114,4 +114,12 @@ public class Gun : MonoBehaviour
         bulletsInMag = magazineSize;
         UpdateAmmoUI();
     }
+
+    // 👇 ESTE es el que usa el pickup
+    public void AddAmmoClips(int amount)
+    {
+        magazines += amount;
+        UpdateAmmoUI();
+        Debug.Log($"[Gun] Cargadores ahora: {magazines}");
+    }
 }

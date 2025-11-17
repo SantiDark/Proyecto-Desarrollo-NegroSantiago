@@ -267,8 +267,10 @@ public class EnemyAI : MonoBehaviour
     {
         if (state == State.dead) return;
 
+        // feedback inmediato
         SetState(State.damage);
 
+        // arrancamos el “timer” de 3 segundos si todavía no estaba corriendo
         if (!alertAfterHitCoroutineRunning)
             StartCoroutine(AlertIfAliveAfterDelay(3f));
     }
@@ -278,9 +280,8 @@ public class EnemyAI : MonoBehaviour
         alertAfterHitCoroutineRunning = true;
         yield return new WaitForSeconds(delay);
 
-        if (state != State.dead &&
-            state != State.alert &&
-            state != State.chase)
+        // Si después de 3 segundos SIGUE VIVO, pasa a alerta y avisa a todos
+        if (state != State.dead)
         {
             RaiseGlobalAlertFromEnemy();
             SetState(State.alert);
@@ -288,6 +289,7 @@ public class EnemyAI : MonoBehaviour
 
         alertAfterHitCoroutineRunning = false;
     }
+
 
     public void OnDeath()
     {
