@@ -21,7 +21,7 @@ MonoBehaviour:
   visionDistance: 10
   visionObstacles:
     serializedVersion: 2
-    m_Bits: 128
+    m_Bits: 4294967295
   touchDamage: 25
   deathVfxPrefab: {fileID: 0}
   staminaDrainPerSecond: 3
