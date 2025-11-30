@@ -3,9 +3,16 @@ using UnityEngine;
 public class PauseManager : MonoBehaviour
 {
     [Header("UI")]
-    public GameObject pauseMenu; // Panel de pausa opcional
+    public GameObject pauseMenu; // Panel de pausa
 
     bool isPaused = false;
+
+    void Start()
+    {
+        // asegurar cursor bloqueado al iniciar
+        Cursor.visible = false;
+        Cursor.lockState = CursorLockMode.Locked;
+    }
 
     void Update()
     {
@@ -24,7 +31,6 @@ public class PauseManager : MonoBehaviour
         if (pauseMenu)
             pauseMenu.SetActive(isPaused);
 
-        // opcional: manejar el cursor
         Cursor.visible = isPaused;
         Cursor.lockState = isPaused ? CursorLockMode.None : CursorLockMode.Locked;
     }

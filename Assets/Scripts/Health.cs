@@ -30,7 +30,6 @@ public class Health : MonoBehaviour
     {
         if (current <= 0) return;
 
-        // daño siempre positivo
         int dmg = Mathf.Max(0, amount);
         int prev = current;
 
@@ -39,8 +38,8 @@ public class Health : MonoBehaviour
         if (current != prev)
             OnHealthChanged?.Invoke(current, maxHealth);
 
-        // ¿Es un enemigo?
-        var ai = GetComponent<EnemyAI>();
+        // 👇 Buscamos EnemyAI en este objeto o en el padre (por si el Health está en un hijo)
+        var ai = GetComponentInParent<EnemyAI>();
         if (ai && dmg > 0)
         {
             if (current > 0)
@@ -69,6 +68,8 @@ public class Health : MonoBehaviour
             }
         }
     }
+
+
 
     public void Heal(int amount)
     {

@@ -23,9 +23,9 @@ public class EnemyAI : MonoBehaviour
     float fireCooldown = 0f;
 
     [Header("Patrulla")]
-    public Transform[] patrolPoints;           // puntos de patrulla del nivel
-    public float patrolSpeed = 2.0f;           // velocidad en patrulla
-    public float patrolArriveThreshold = 0.3f; // distancia mínima para cambiar de punto
+    public Transform[] patrolPoints;
+    public float patrolSpeed = 2.0f;
+    public float patrolArriveThreshold = 0.3f;
     int patrolIndex = 0;
 
     [Header("Debug/Gizmos")]
@@ -80,14 +80,17 @@ public class EnemyAI : MonoBehaviour
 
         RunState();
 
-        // DISPARO: si lo ve y está en rango, intenta hacer daño
-        if (CanSeePlayer())
+        // DISPARO: solo ataca si YA está en alert/chase
+        if (player && (state == State.alert || state == State.chase))
         {
-            float dist = Vector3.Distance(transform.position, player.position);
-            if (dist <= fireDistance)
+            if (CanSeePlayer())
             {
-                SetState(State.damage);  // para que el texto muestre damage
-                TryShootAtPlayer();
+                float dist = Vector3.Distance(transform.position, player.position);
+                if (dist <= fireDistance)
+                {
+                    SetState(State.chase);   // sigue en persecución mientras dispara
+                    TryShootAtPlayer();
+                }
             }
         }
 
@@ -109,7 +112,7 @@ public class EnemyAI : MonoBehaviour
     }
 
     // ------------------------------------------------------
-    //  VISIÓN (distancia + cono + oclusión con Obstacles)
+    //  VISIÓN (distancia + cono + oclusión)
     // ------------------------------------------------------
     bool CanSeePlayer()
     {
@@ -119,29 +122,23 @@ public class EnemyAI : MonoBehaviour
         Vector3 playerEye = player.position + Vector3.up * eyeHeight;
         Vector3 toTarget = playerEye - eye;
 
-        // 1) Distancia
         float dist = toTarget.magnitude;
         if (dist > stats.visionDistance) return false;
 
-        // 2) Ángulo
         if (stats.useVisionCone)
         {
             float angle = Vector3.Angle(transform.forward, toTarget);
             if (angle > stats.visionAngle * 0.5f) return false;
         }
 
-        // 3) Oclusión
         if (Physics.Raycast(eye, toTarget.normalized, out RaycastHit hit,
             stats.visionDistance, ~0, QueryTriggerInteraction.Ignore))
         {
             if (hit.transform != player)
             {
-                int hitLayerMask = 1 << hit.transform.gameObject.layer;
-                if ((stats.visionObstacles.value & hitLayerMask) != 0)
-                {
-                    // hay algo entre medio en layer de Obstacles
+                int mask = 1 << hit.transform.gameObject.layer;
+                if ((stats.visionObstacles.value & mask) != 0)
                     return false;
-                }
             }
         }
 
@@ -149,7 +146,7 @@ public class EnemyAI : MonoBehaviour
     }
 
     // ------------------------------------------------------
-    //  LÓGICA POR ESTADO (SOLO MOVIMIENTO / ALERTAS)
+    //  LÓGICA POR ESTADO
     // ------------------------------------------------------
     void RunState()
     {
@@ -159,6 +156,7 @@ public class EnemyAI : MonoBehaviour
                 controller.SimpleMove(Vector3.zero);
                 if (player) Face(player.position);
 
+                // Descubrimiento visual directo → ALERT inmediato
                 if (CanSeePlayer())
                 {
                     RaiseGlobalAlertFromEnemy();
@@ -169,6 +167,7 @@ public class EnemyAI : MonoBehaviour
             case State.patrol:
                 UpdatePatrol();
 
+                // Descubrimiento visual desde patrulla → ALERT inmediato
                 if (CanSeePlayer())
                 {
                     RaiseGlobalAlertFromEnemy();
@@ -178,8 +177,19 @@ public class EnemyAI : MonoBehaviour
 
             case State.alert:
             case State.chase:
-            case State.damage:
+                // En alerta o persecución → se mueve hacia el jugador
                 UpdateMoveTowardsPlayer();
+                break;
+
+            case State.damage:
+                // Acaba de recibir un disparo pero todavía no entró en alerta.
+                // Se queda quieto (feedback de impacto) hasta que la corrutina lo pase a alert.
+                controller.SimpleMove(Vector3.zero);
+                if (player) Face(player.position);
+                break;
+
+            case State.dead:
+                controller.SimpleMove(Vector3.zero);
                 break;
         }
     }
@@ -235,7 +245,7 @@ public class EnemyAI : MonoBehaviour
     }
 
     // ------------------------------------------------------
-    //  DISPARO (SIN RAYCAST EXTRA)
+    //  DISPARO
     // ------------------------------------------------------
     void TryShootAtPlayer()
     {
@@ -267,10 +277,15 @@ public class EnemyAI : MonoBehaviour
     {
         if (state == State.dead) return;
 
-        // feedback inmediato
+        // Si ya estaba en alerta o persecución, no arrancamos el timer
+        // (ya cumplió los otros disparadores de alerta).
+        if (state == State.alert || state == State.chase)
+            return;
+
+        // Feedback inmediato de haber sido herido
         SetState(State.damage);
 
-        // arrancamos el “timer” de 3 segundos si todavía no estaba corriendo
+        // Timer de 3 segundos: si sobrevive, pasa a ALERT
         if (!alertAfterHitCoroutineRunning)
             StartCoroutine(AlertIfAliveAfterDelay(3f));
     }
@@ -280,7 +295,7 @@ public class EnemyAI : MonoBehaviour
         alertAfterHitCoroutineRunning = true;
         yield return new WaitForSeconds(delay);
 
-        // Si después de 3 segundos SIGUE VIVO, pasa a alerta y avisa a todos
+        // Si después de 3 segundos sigue vivo:
         if (state != State.dead)
         {
             RaiseGlobalAlertFromEnemy();
@@ -289,7 +304,6 @@ public class EnemyAI : MonoBehaviour
 
         alertAfterHitCoroutineRunning = false;
     }
-
 
     public void OnDeath()
     {
