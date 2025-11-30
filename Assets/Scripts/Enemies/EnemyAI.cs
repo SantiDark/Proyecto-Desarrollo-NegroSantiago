@@ -182,8 +182,7 @@ public class EnemyAI : MonoBehaviour
                 break;
 
             case State.damage:
-                // Acaba de recibir un disparo pero todavía no entró en alerta.
-                // Se queda quieto (feedback de impacto) hasta que la corrutina lo pase a alert.
+                // Estado transitorio después de recibir daño
                 controller.SimpleMove(Vector3.zero);
                 if (player) Face(player.position);
                 break;
@@ -277,17 +276,27 @@ public class EnemyAI : MonoBehaviour
     {
         if (state == State.dead) return;
 
-        // Si ya estaba en alerta o persecución, no arrancamos el timer
-        // (ya cumplió los otros disparadores de alerta).
-        if (state == State.alert || state == State.chase)
-            return;
+        // Log para depurar
+        Debug.Log($"[EnemyAI] {name} recibió {amount} de daño");
 
-        // Feedback inmediato de haber sido herido
+        // 1) Feedback inmediato: estado DAMAGE (se ve en el texto)
         SetState(State.damage);
 
-        // Timer de 3 segundos: si sobrevive, pasa a ALERT
+        // 2) Pasar a CHASE casi al toque (después de un instante)
+        StartCoroutine(SwitchDamageToChase());
+
+        // 3) Arrancar el timer de 3s: si no muere, ALERT + global
         if (!alertAfterHitCoroutineRunning)
             StartCoroutine(AlertIfAliveAfterDelay(3f));
+    }
+
+    IEnumerator SwitchDamageToChase()
+    {
+        // Dejar un pequeño margen para que se vea "damage"
+        yield return new WaitForSeconds(0.1f);
+
+        if (state != State.dead)
+            SetState(State.chase);
     }
 
     IEnumerator AlertIfAliveAfterDelay(float delay)
@@ -295,7 +304,7 @@ public class EnemyAI : MonoBehaviour
         alertAfterHitCoroutineRunning = true;
         yield return new WaitForSeconds(delay);
 
-        // Si después de 3 segundos sigue vivo:
+        // Si después de 3 segundos sigue vivo → alerta global
         if (state != State.dead)
         {
             RaiseGlobalAlertFromEnemy();
