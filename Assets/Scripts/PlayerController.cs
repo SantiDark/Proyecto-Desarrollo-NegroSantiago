@@ -130,6 +130,11 @@ public class PlayerController : MonoBehaviour
         foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
         foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = false;
 
+        // 🔫 Desactivar el arma para que no pueda disparar muerto
+        Gun gun = GetComponentInChildren<Gun>();
+        if (gun != null)
+            gun.enabled = false;
+
         Debug.Log("[Player] Muerto. F1 = respawn, F2 = reiniciar escena.");
     }
 
@@ -160,10 +165,13 @@ public class PlayerController : MonoBehaviour
         threatDrainPerSecond = 0f;
         isDead = false;
 
-        // 🔫🔫🔫  👉 RESETEAR ARMA AL RESPawN
+        // 🔫 Rehabilitar arma y resetear ammo al respawn
         Gun gun = GetComponentInChildren<Gun>();
         if (gun != null)
+        {
+            gun.enabled = true;
             gun.ResetAmmo();
+        }
 
         Debug.Log("[Player] Respawn realizado.");
     }
